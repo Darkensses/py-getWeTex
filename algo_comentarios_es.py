@@ -3,6 +3,7 @@ import argparse
 from beautifultable import BeautifulTable
 import binascii
 
+#variables globales para almacenar los valores
 aNovo = []
 aGrafDef = []
 colores = 0
@@ -12,6 +13,8 @@ aGraf = []
 lista_graficos = []
 lista_paletas = []
 
+#Funcion para calcular el tamaño de los graficos
+#Necesita el offset del grafico a calcular
 def get_size(offset):
     counter = 0
     i = 0
@@ -69,7 +72,9 @@ def get_size(offset):
         i = i >> 1
     return size
 
+#Funcion para descomprimir el grafico
 def visualiza(offset):
+    #Permiso para modificar la variable global
     global aNovo
     aNovo = ['00' for i in range(300000)]
     counter = 0
@@ -129,21 +134,24 @@ def visualiza(offset):
         
         i = i >> 1
 
-
+#Funcion para guardar el archivo
 def guardar(id_graf, id_paleta):
+    #Guarda las coordernadas X y Y de la paleta y de los graficos
     palx = int(lista_paletas[id_paleta][3])
     paly = int(lista_paletas[id_paleta][4])
     vramx = int(lista_graficos[id_graf][3])
     vramy = int(lista_graficos[id_graf][4])
 
+    #Lista para guardar los bytes finales 
     respuesta = []
 
+    #Guarda la posicion de la paleta en Hex
     pospal = hex(palx)[2:].zfill(4)
     pospal2 = pospal[2:] + pospal[:2]
     pospal = hex(paly)[2:].zfill(4)
     pospal2 = pospal2 + pospal[2:] + pospal[:2]
 
-
+    #Alto y largo de los graficos y el offset de la paleta
     alt = lista_graficos[id_graf][6]
     larg = lista_graficos[id_graf][5]
     offpal = lista_paletas[id_paleta][1]
@@ -151,6 +159,14 @@ def guardar(id_graf, id_paleta):
     if colores == 16:
         larg = larg * 2
 
+    
+    #Crea la informacion de la cabezera del TIM
+    #La primera cabezera contiene bytes predeterminados y la posicion de la paleta
+    #La segunda guarda el tamaño de bytes utiles
+    #las coordenadas X de los graficos
+    #las coordenadas y de los graficos
+    #El largo de la paleta
+    #El ancho de la paleta
     if colores == 16:
         cabezaTIM = '10000000080000002C000000'+ pospal2 +'10000100'
         cabeza2TIM = hex((alt * larg) + 12)[2:].zfill(4)
@@ -192,15 +208,19 @@ def guardar(id_graf, id_paleta):
         tmpstr2 = tmpstr[2:] + tmpstr[:2]
         cabeza2TIM= cabeza2TIM+tmpstr2
     
-    
+    #Crea el archivo, el nombre es el id del grafico y el id de la paleta
+    #se parados por un -
+    #ej. 0-0.tim
     archivo = open(str(id_graf)+'-'+str(id_paleta)+'.tim', 'wb')
 
+    #Separa el primer cabezal por bytes y los guarda
     mm=0
     while mm<len(cabezaTIM) or mm==len(cabezaTIM):
         dato = cabezaTIM[mm:mm+2]
         respuesta.append(dato)
         mm = mm + 2
 
+    #Guarda la informacion de la paleta
     posicion = int(offpal) 
     mm = 0
     while mm < (colores * 2):
@@ -208,21 +228,23 @@ def guardar(id_graf, id_paleta):
         mm = mm + 1
         posicion = posicion + 1
     
+    #Separa el segundo cabezal por bytes y los guarda
     mm=0
-
     while mm<len(cabeza2TIM) or mm==len(cabeza2TIM):
         dato =cabeza2TIM[mm:mm+2]
         respuesta.append(dato)
         mm = mm + 2
 
+    
     largo2 =larg
     if colores == 16:
         largo2=larg // 2
 
+    #Guarda la informacion del grafico descompreso
     for i in range((alt*largo2)):
         respuesta.append(aNovo[2000+i])
 
-
+    #Ciclo para guardar toda la informacion en el archivo
     for dato in respuesta:
         if len(dato)==1:
             dato = '0' + str(dato)
@@ -233,32 +255,49 @@ def guardar(id_graf, id_paleta):
 
 
 
-#leer el archivo
+#Declaracion de argumentos para poder leer el archivo desde la terminal
 ap = argparse.ArgumentParser()
 ap.add_argument("-f", "--file", required=True,
 	help="path to file")
 
 args = vars(ap.parse_args())
 
+#Abre del archivo y lectura del tamaño
 ArChivo= open(args['file'], 'rb')
 x = os.path.getsize(args['file'])
 
+#Se asegura que la lectura del archivo se inicie desde el principio
 ArChivo.seek(0,0)
 
+#Se lee el archivo (en binario)y se inicia una lista con valores hex del tamaño
+#del archivo
 aBuffer = ArChivo.read()
 aGraf = ['00' for i in range(x)]
 
+#se convierte cada byte de binario a hex y se guarda el valor en aGraf
 for b in range(x):
     h = aBuffer[b]
     he = hex(h)[2:].upper().zfill(2)
     aGraf[b] = he
 
+#Se cierra el archivo para liberar memoria
 ArChivo.close()
 
+#Inicializacion de la tabla que se muestra en la terminal
 table = BeautifulTable()
+
+#Offset Decimal = la cantidad de bytes entre el inicio del archivo y el inicio de la textura
+#Offset Hex = lo mismo que el offset decimal que en hexadecimal
+#VRAM X = Coordenadas X de la textura, que seran pasadas a la VRAM
+#VRAM Y = Coordenadas X de la textura, que seran pasadas a la VRAM
+#Width = el ancho de la textura en decimal
+#Heigth = la altura de la textura en decimal
+#Size = el tamaño de la textura
 table.columns.header = ["ID","Offset Decimal", "Offset Hexadecimal", "VRAM X",
                         "VRAM Y","Width", "Heigth", "Size"]
 id_tabla = 0
+
+#Se buscan los bytes en los cuales una textura inicia
 for b in range(x-16):
     if (
             (aGraf[b]=='0A') and (aGraf[b+1]=='00') and \
@@ -269,6 +308,7 @@ for b in range(x-16):
             (aGraf[b+14]=='0E') or (aGraf[b+14]=='0F')or \
             (aGraf[b+14]=='08'))
         ):
+            #Calcula el offset decimal
             offset = 0
             if aGraf[b+14] == '08':  
                 offset = int(aGraf[b+13] + aGraf[b+12],16) + 5320
@@ -287,6 +327,7 @@ for b in range(x-16):
             elif aGraf[b+14] == '12': 
                 offset = int('3' + aGraf[b+13] + aGraf[b+12],16)
 
+            #Se guarda en una lista los valores descritos arriba
             lista_graficos.append([
                                 id_tabla,           
                                 offset, 
@@ -299,14 +340,14 @@ for b in range(x-16):
             
             id_tabla = id_tabla + 1
 
-
+#Se agrega cada valor de la lista de graficos a la tabla y se imprime en la terminal
 for i in lista_graficos:
     table.rows.append(i)
 
 print(table)
 print()
 
-#Colores
+#Se repite el mismo proceso de los graficos, pero ahora buscando las paletas de colores
 table = BeautifulTable()
 table.columns.header = ["ID","Offset Decimal", "Offset Hexadecimal", 
                     "VRAM X", "VRAM Y","Width", "Heigth", "Size","Colors"]
@@ -383,6 +424,7 @@ for b in range(x-15):
         
         lista_offset.append(offset)
 
+#Se calcula el tamaño y los bits de los colores (16 o 256)
 npos = 0
 for b in range(-1,3):
     for c in range(len(lista_offset)):
@@ -449,6 +491,7 @@ for i in lista_paletas:
 
 print(table)
 
+#Bloque de codigo para guardar las texturas deseadas con los colores deseados
 #Local Numeros jugador y portero
 visualiza(lista_graficos[0][1])
 guardar(0, 0)
